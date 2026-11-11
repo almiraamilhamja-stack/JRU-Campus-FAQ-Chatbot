@@ -1,0 +1,14 @@
+# Versions are minimums; pin exact versions after your first successful run (pip freeze).
+streamlit>=1.40
+torch
+transformers>=4.44
+accelerate
+sentence-transformers
+langchain-community
+langchain-text-splitters
+langchain-huggingface
+langchain-chroma
+chromadb
+pypdf
+python-dotenv
+groq>=1.7.0
