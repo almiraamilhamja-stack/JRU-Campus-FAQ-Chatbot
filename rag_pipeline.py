@@ -16,7 +16,20 @@ DOMAIN_NAME = "Jose Rizal University (JRU) student and faculty handbooks"
 
 # Read these defensively so this file also gives a clear error if config.py
 # has not yet been updated with GROQ_API_KEY / GROQ_MODEL.
-GROQ_API_KEY = getattr(config, "GROQ_API_KEY", "") or os.environ.get("GROQ_API_KEY", "")
+
+def get_groq_api_key():
+    key = getattr(config, "GROQ_API_KEY", "") or os.environ.get("GROQ_API_KEY", "")
+
+    if not key:
+        try:
+            import streamlit as st
+            key = st.secrets.get("GROQ_API_KEY", "")
+        except Exception:
+            key = ""
+
+    return key
+
+GROQ_API_KEY = get_groq_api_key()
 GROQ_MODEL = (
     getattr(config, "GROQ_MODEL", "")
     or os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
