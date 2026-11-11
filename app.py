@@ -554,71 +554,140 @@ def history_page(user):
 
 
 # ------------------------------------------------------------------ Knowledge Base
+
 def kb_page(user):
-    st.markdown("<h2 class='page-title'>Knowledge Base</h2><div class='top-sub'>How the chatbot finds and writes its answers.</div>",
-                unsafe_allow_html=True)
+    st.markdown(
+        "<h2 class='page-title'>Knowledge Base</h2>"
+        "<div class='top-sub'>How the chatbot finds and writes its answers.</div>",
+        unsafe_allow_html=True
+    )
     st.markdown(status_chips(), unsafe_allow_html=True)
+
     idx = vector_store.index_status()
-    info = rag_pipeline._loader.pipeline.info() if rag_pipeline.is_loaded() else None
-    cache = rag_pipeline.cache_info()
-    tiles = [("Language model", config.LLM_MODEL), ("Embedding model", config.EMBEDDING_MODEL),
-             ("Vector database", f"ChromaDB · {config.COLLECTION_NAME}"),
-             ("Chunking", f"{config.CHUNK_SIZE} characters, overlap {config.CHUNK_OVERLAP}"),
-             ("Retrieved chunks (top-k)", str(info["top_k"]) if info else f"{config.TOP_K_GPU} on a GPU, {config.TOP_K_CPU} on a CPU"),
-             ("Running on", f"{info['device']} ({info['dtype']})" if info else "not loaded yet"),
-             ("Model start-up time", f"{info['load_times'].get('total', 0):.0f} s (once per server start)" if info else "not loaded yet"),
-             ("Index status", f"{idx['state']} ({idx['chunks']} chunks)"),
-             ("Saved answers", f"{cache['size']} of {cache['capacity']} · {cache['hits']} reused")]
-    st.markdown("<div class='kb-grid'>" + "".join(
-        f"<div class='kb-item'><small>{html.escape(k)}</small><b>{html.escape(v)}</b></div>" for k, v in tiles) + "</div>",
-        unsafe_allow_html=True)
+    info = None
+
+    # Answer caching is currently disabled.
+    cache = {
+        "enabled": False,
+        "size": 0,
+        "capacity": 0,
+        "hits": 0
+    }
+
+    tiles = [
+        ("Language model", config.LLM_MODEL),
+        ("Embedding model", config.EMBEDDING_MODEL),
+        ("Vector database", f"ChromaDB · {config.COLLECTION_NAME}"),
+        ("Chunking", f"{config.CHUNK_SIZE} characters, overlap {config.CHUNK_OVERLAP}"),
+        ("Retrieved chunks (top-k)",
+         str(info["top_k"]) if info else
+         f"{config.TOP_K_GPU} on a GPU, {config.TOP_K_CPU} on a CPU"),
+        ("Running on",
+         f"{info['device']} ({info['dtype']})" if info else "not loaded yet"),
+        ("Model start-up time",
+         f"{info['load_times'].get('total', 0):.0f} s (once per server start)"
+         if info else "not loaded yet"),
+        ("Index status", f"{idx['state']} ({idx['chunks']} chunks)"),
+        ("Saved answers", "Disabled")
+    ]
+
+    st.markdown(
+        "<div class='kb-grid'>" +
+        "".join(
+            f"<div class='kb-item'><small>{html.escape(k)}</small>"
+            f"<b>{html.escape(v)}</b></div>"
+            for k, v in tiles
+        ) +
+        "</div>",
+        unsafe_allow_html=True
+    )
+
     st.caption(config.DISCLAIMER)
     st.markdown("### Manage the index")
+
     if not config.ADMIN_MODE:
-        st.caption("Index maintenance is available to the person who runs this server (start it with JRU_ADMIN=1).")
+        st.caption(
+            "Index maintenance is available to the person who runs this server "
+            "(start it with JRU_ADMIN=1)."
+        )
         return
-    if st.button("🔄 Rebuild the vector index", help="Re-reads the PDFs and rebuilds ChromaDB. Slow on a CPU."):
+
+    if st.button(
+        "🔄 Rebuild the vector index",
+        help="Re-reads the PDFs and rebuilds ChromaDB. Slow on a CPU."
+    ):
         with st.status("Rebuilding the index...", expanded=True) as status:
             try:
                 result = vector_store.rebuild_index(progress=status.write)
-                status.update(label=f"Index rebuilt: {result['chunks']} chunks", state="complete")
+                status.update(
+                    label=f"Index rebuilt: {result['chunks']} chunks",
+                    state="complete"
+                )
                 for p in result["problems"]:
                     st.warning(p)
             except Exception as exc:
                 status.update(label="Rebuild failed", state="error")
                 st.error(f"{type(exc).__name__}: {exc}")
+
     up = st.file_uploader("Add a PDF reference document", type=["pdf"])
+
     if up is not None and st.button("Validate and save the uploaded PDF"):
-        ok, msg, safe = document_loader.validate_upload(up.name, up.getvalue())
+        ok, msg, safe = document_loader.validate_upload(
+            up.name, up.getvalue()
+        )
         if ok:
             (config.DATA_DIR / safe).write_bytes(up.getvalue())
-            st.success(f"Saved as {safe}. Use 'Rebuild the vector index' so the chatbot can use it.")
+            st.success(
+                f"Saved as {safe}. Use 'Rebuild the vector index' "
+                "so the chatbot can use it."
+            )
         else:
             st.error(msg)
 
 
+
 # ------------------------------------------------------------------ Settings
+
 def settings_page(user):
     uid = user["id"]
+
     st.markdown("<h2 class='page-title'>Settings</h2>", unsafe_allow_html=True)
     st.markdown("### Answers")
 
     def save_expand():
-        chat_history.set_preference(uid, "expand_sources", "1" if st.session_state["set_expand"] else "0")
-    st.checkbox("Show the retrieved passages expanded under every answer", value=pref(uid, "expand_sources", "0") == "1",
-                key="set_expand", on_change=save_expand)
-    c = rag_pipeline.cache_info()
-    st.caption(f"Repeated standalone questions are answered from a saved copy (same question, same index). Currently {c['size']} saved.")
-    if st.button("Clear saved answers", key="clear_cache"):
-        st.success(f"Removed {rag_pipeline.clear_cache()} saved answers.")
+        chat_history.set_preference(
+            uid,
+            "expand_sources",
+            "1" if st.session_state["set_expand"] else "0"
+        )
+
+    st.checkbox(
+        "Show the retrieved passages expanded under every answer",
+        value=pref(uid, "expand_sources", "0") == "1",
+        key="set_expand",
+        on_change=save_expand
+    )
+
+    st.caption(
+        "Answer caching is currently disabled. "
+        "Each question is processed through the RAG pipeline."
+    )
+
     st.markdown("### Look and feel")
     st.caption("Colour theme and text size are on the Appearance page.")
+
     if st.button("Open Appearance", key="to_appearance"):
         goto("appearance")
+
     st.markdown("### Session")
-    st.caption("Your conversations are saved for this browser. Keep the page address (it ends with ?g=...) to see them again.")
+    st.caption(
+        "Your conversations are saved for this browser. "
+        "Keep the page address (it ends with ?g=...) to see them again."
+    )
+
     if st.button("Return to the welcome page", key="settings_home"):
         leave()
+
 
 
 # ------------------------------------------------------------------ Appearance
